@@ -354,7 +354,7 @@ tr:hover td{background:#f8fafc}
 <script>
 // ══════════════════════════════════════════════════════════════
 //  ▼▼▼  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▼▼▼
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbwUDtoZLrsS9KxsB0hypbec0Qt5AtAcNd7ci8HfyDpox1B5FvnxoC85_KQxWx_7367F6w/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbyPlm9NTeqpt97vCgGKpigE7xagz2-4H8csPNxXmMo_99-unNWgm2KnbMFRIEpBR8p0-g/exec';
 //  ▲▲▲  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▲▲▲
 // ══════════════════════════════════════════════════════════════
 
@@ -363,38 +363,40 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbwUDtoZLrsS9KxsB0hypbec0Q
 //  Inyecta <script src="GAS_URL?...&callback=fn"> en el HEAD
 //  GAS responde: fn({...});  el browser lo ejecuta como JS
 // ══════════════════════════════════════════════════════════════
-/* ── gasGet: JSONP — patrón idéntico al CRM Bombas que ya funciona ──
-   CRÍTICO: s.src y s.onerror se asignan ANTES de appendChild,
-   igual que el CRM. Los parámetros extra van en un único campo 'data'.
+/* ── gasGet: JSONP — patrón Maia/Intranet Lini ──────────────────
+   PATRÓN CRÍTICO: appendChild ANTES de asignar .src
+   (igual que Tienda Maia y CRM Bombas que ya funcionan)
 */
 function gasGet(action, extraParams) {
   return new Promise(function(resolve, reject) {
-    var cbName = 'liniCb_' + action + '_' + Date.now();
-    var url    = GAS_URL + '?action=' + encodeURIComponent(action) + '&callback=' + cbName;
-    /* Parámetros extra van en un solo campo JSON para no romper JSONP */
+    var cbName = '_liniCot_' + action + '_' + Date.now() + '_' + Math.floor(Math.random()*9999);
+    var url = GAS_URL + '?action=' + encodeURIComponent(action) + '&callback=' + cbName;
     if (extraParams && Object.keys(extraParams).length > 0) {
       url += '&data=' + encodeURIComponent(JSON.stringify(extraParams));
     }
-    var timer = setTimeout(function() {
-      delete window[cbName];
-      reject(new Error('Tiempo de espera agotado. Verifica la URL y que el deploy sea "Cualquier persona".'));
+    var script = document.createElement('script');
+    var timer  = setTimeout(function() {
+      cleanup();
+      reject(new Error('Tiempo de espera agotado (20s). Verifica que el deploy sea "Cualquier persona".'));
     }, 20000);
     window[cbName] = function(data) {
-      clearTimeout(timer);
-      delete window[cbName];
+      cleanup();
       resolve(data);
     };
-    var s     = document.createElement('script');
-    s.src     = url;                          /* src ANTES de appendChild */
-    s.onerror = function() {
+    function cleanup() {
       clearTimeout(timer);
       delete window[cbName];
-      try { document.head.removeChild(s); } catch(e) {}
-      reject(new Error('Error de red. Verifica la URL del deploy y que esté publicado como "Cualquier persona".'));
+      try { if (script.parentNode) document.head.removeChild(script); } catch(e) {}
+    }
+    script.onerror = function() {
+      cleanup();
+      reject(new Error('Error de red con GAS. Verifica la URL y permisos del deploy.'));
     };
-    document.head.appendChild(s);            /* appendChild al final */
+    document.head.appendChild(script); // appendChild ANTES de asignar src — patrón Maia
+    script.src = url;
   });
 }
+
 
 // POST para mutaciones (guardar, actualizar, eliminar)
 function gasPost(payload) {
