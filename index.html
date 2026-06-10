@@ -354,7 +354,7 @@ tr:hover td{background:#f8fafc}
 <script>
 // ══════════════════════════════════════════════════════════════
 //  ▼▼▼  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▼▼▼
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbymvIzCXNw2-X0gbqjabe400hF2RmUgXwgk9mc6CTwRmqPAe8BpNSSaNXtHGisaJ79D/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbzKLv_mYDApcF3DawACN7dRtXaXVqWct7vu5O8774LgBFDIg63t0_KwB8xi9AmLVCSCAg/exec';
 //  ▲▲▲  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▲▲▲
 // ══════════════════════════════════════════════════════════════
 
@@ -363,9 +363,11 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbymvIzCXNw2-X0gbqjabe400h
 //  Inyecta <script src="GAS_URL?...&callback=fn"> en el HEAD
 //  GAS responde: fn({...});  el browser lo ejecuta como JS
 // ══════════════════════════════════════════════════════════════
+/* ── gasGet: JSONP idéntico al patrón CRM Bombas que ya funciona ── */
 function gasGet(params) {
   return new Promise(function(resolve, reject) {
-    var cbName = '_liniCot' + Date.now() + Math.floor(Math.random()*9999);
+    var cbName = 'liniCb_' + Date.now() + '_' + Math.floor(Math.random()*9999);
+    /* Usar 'action' como parámetro principal (igual que CRM Bombas) */
     var qs = Object.keys(params).map(function(k) {
       return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
     }).join('&');
@@ -373,7 +375,7 @@ function gasGet(params) {
     var script = document.createElement('script');
     var timer  = setTimeout(function() {
       cleanup();
-      reject(new Error('Sin respuesta del servidor (timeout 30s). Verifica que la Web App esté publicada como "Cualquier persona".'));
+      reject(new Error('Tiempo de espera agotado (30s). Verifica que la Web App esté publicada como "Cualquier persona".'));
     }, 30000);
     window[cbName] = function(data) { cleanup(); resolve(data); };
     function cleanup() {
@@ -383,8 +385,9 @@ function gasGet(params) {
     }
     script.onerror = function() {
       cleanup();
-      reject(new Error('No se pudo conectar con GAS. Verifica la URL y permisos.'));
+      reject(new Error('Error de red al conectar con GAS. Verifica que la URL sea correcta y que el deploy sea "Cualquier persona".'));
     };
+    /* IMPORTANTE: asignar src DESPUÉS de agregar al DOM */
     document.head.appendChild(script);
     script.src = url;
   });
@@ -426,7 +429,7 @@ function initApp() {
   document.getElementById('user-role').textContent   = SESSION.rol || 'USUARIO';
   startClock();
   loader(true,'Cargando catálogos...');
-  gasGet({ accion:'catalogdata' })
+  gasGet({ action:'catalogdata' })
     .then(function(res) {
       if (!res.ok) { loader(false); alertErr('Error al cargar datos: ' + (res.error||'')); return; }
       db = res;
@@ -467,7 +470,7 @@ function var_accent(){ return '#4f46e5'; }
 // ══════════════════════════════════════════════════════════════
 function cargarCotizaciones(cb) {
   loader(true,'Cargando cotizaciones...');
-  gasGet({ accion:'cotizaciones' })
+  gasGet({ action:'cotizaciones' })
     .then(function(res) {
       loader(false);
       if (!res.ok) { alertErr(res.error); return; }
@@ -707,7 +710,7 @@ function abrirClaves(idControl) {
   document.getElementById('partidas-body').innerHTML='';
   actualizarContadorPartidas();
   loader(true,'Cargando partidas...');
-  gasGet({ accion:'partidas', idControl:idControl })
+  gasGet({ action:'partidas', idControl:idControl })
     .then(function(res) {
       loader(false);
       if (!res.ok){alertErr(res.error);return;}
@@ -740,7 +743,7 @@ function renderPartidasBody(resolvedMap) {
       if(sel&&r){ sel.innerHTML='<option value="">--</option>'; (r.variantes||[]).forEach(function(v){ sel.innerHTML+='<option value="'+esc(v)+'">'+esc(v)+'</option>'; }); if(r.difResuelta)sel.value=r.difResuelta; }
     } else {
       (function(capturedIdx,capturedDif) {
-        gasGet({ accion:'difvariantes', clave10:claveVisual })
+        gasGet({ action:'difvariantes', clave10:claveVisual })
           .then(function(res) {
             if(!res.ok)return;
             var sel=document.getElementById('fd'+capturedIdx);
@@ -788,7 +791,7 @@ function eliminarFila(idx){ filasClave.splice(idx,1); renderPartidasBody(); }
 function onClaveInput(idx) {
   var clave10=document.getElementById('fc'+idx)?document.getElementById('fc'+idx).value.trim():'';
   if(!clave10)return;
-  gasGet({ accion:'difvariantes', clave10:clave10 })
+  gasGet({ action:'difvariantes', clave10:clave10 })
     .then(function(res) {
       if(!res.ok)return;
       var sel=document.getElementById('fd'+idx);
@@ -804,7 +807,7 @@ function buscarClave14(idx) {
   var selDif=document.getElementById('fd'+idx);
   var difVar=selDif?selDif.value.trim():'';
   if(!clave10||!difVar)return;
-  gasGet({ accion:'clave14', clave10:clave10, difVar:difVar })
+  gasGet({ action:'clave14', clave10:clave10, difVar:difVar })
     .then(function(res) {
       if(!res.ok||!res.datos)return;
       var d=res.datos;
@@ -872,7 +875,7 @@ function procesarMasiva() {
   closeModal('modal-masiva');
   loader(true,'Resolviendo '+nuevas.length+' claves...');
   var items=nuevas.map(function(p){ return { clave10:p.clave10,difVariante:p.difVariante }; });
-  gasGet({ accion:'resolverbatch', items:encodeURIComponent(JSON.stringify(items)) })
+  gasGet({ action:'resolverbatch', items:encodeURIComponent(JSON.stringify(items)) })
     .then(function(res) {
       loader(false);
       if(!res.ok){alertErr(res.error||'Error al resolver claves');return;}
@@ -940,7 +943,7 @@ function descargarCotizacion(idControl) {
 
 function exportarTabla() {
   loader(true,'Exportando...');
-  gasGet({ accion:'exportartabla' })
+  gasGet({ action:'exportartabla' })
     .then(function(res) {
       loader(false);
       if(!res.ok){alertErr(res.error);return;}
@@ -977,7 +980,7 @@ function ejecutarBusqueda() {
   var q=document.getElementById('buscar-input')?document.getElementById('buscar-input').value.trim():'';
   if(!q){alertWarn('Escribe algo para buscar.');return;}
   loader(true,'Buscando...');
-  gasGet({ accion:'buscarproductos', query:q })
+  gasGet({ action:'buscarproductos', query:q })
     .then(function(res) {
       loader(false);
       if(!res.ok){alertErr(res.error);return;}
