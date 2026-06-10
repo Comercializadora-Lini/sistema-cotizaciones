@@ -354,7 +354,7 @@ tr:hover td{background:#f8fafc}
 <script>
 // ══════════════════════════════════════════════════════════════
 //  ▼▼▼  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▼▼▼
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbyPlm9NTeqpt97vCgGKpigE7xagz2-4H8csPNxXmMo_99-unNWgm2KnbMFRIEpBR8p0-g/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbz5qz0vWrifeLoG2ZJaMdFJPg_XSNfNLFQMHJmfgMfjMMNE65vzckdUCP2oOnYNUm2RkA/exec';
 //  ▲▲▲  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▲▲▲
 // ══════════════════════════════════════════════════════════════
 
@@ -363,26 +363,45 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbyPlm9NTeqpt97vCgGKpigE7x
 //  Inyecta <script src="GAS_URL?...&callback=fn"> en el HEAD
 //  GAS responde: fn({...});  el browser lo ejecuta como JS
 // ══════════════════════════════════════════════════════════════
-/* ── gasGet: JSONP — patrón Maia/Intranet Lini ──────────────────
-   PATRÓN CRÍTICO: appendChild ANTES de asignar .src
-   (igual que Tienda Maia y CRM Bombas que ya funcionan)
-*/
+/* ══════════════════════════════════════════════════════════════
+   gasGet — usa fetch() con modo cors.
+   GAS doGet responde JSON; fetch() lo lee directamente.
+   Esto evita todos los problemas de JSONP/script.onerror.
+
+   IMPORTANTE en Apps Script:
+   - Publicar como: Ejecutar como YO, Acceso CUALQUIER PERSONA
+   - ContentService.MimeType.JSON en doGet (ya configurado)
+   ══════════════════════════════════════════════════════════════ */
 function gasGet(action, extraParams) {
+  var url = GAS_URL + '?action=' + encodeURIComponent(action);
+  if (extraParams && Object.keys(extraParams).length > 0) {
+    url += '&data=' + encodeURIComponent(JSON.stringify(extraParams));
+  }
+  return fetch(url)
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .catch(function(err) {
+      /* Fallback a JSONP si fetch falla (ej. redirect de auth) */
+      return gasGetJSONP(action, extraParams);
+    });
+}
+
+/* JSONP fallback — patrón Maia: appendChild ANTES de src */
+function gasGetJSONP(action, extraParams) {
   return new Promise(function(resolve, reject) {
-    var cbName = '_liniCot_' + action + '_' + Date.now() + '_' + Math.floor(Math.random()*9999);
-    var url = GAS_URL + '?action=' + encodeURIComponent(action) + '&callback=' + cbName;
+    var cbName = '_liniCot_' + Date.now() + '_' + Math.floor(Math.random()*9999);
+    var url    = GAS_URL + '?action=' + encodeURIComponent(action) + '&callback=' + cbName;
     if (extraParams && Object.keys(extraParams).length > 0) {
       url += '&data=' + encodeURIComponent(JSON.stringify(extraParams));
     }
     var script = document.createElement('script');
     var timer  = setTimeout(function() {
       cleanup();
-      reject(new Error('Tiempo de espera agotado (20s). Verifica que el deploy sea "Cualquier persona".'));
+      reject(new Error('Sin respuesta del servidor. Verifica que el deploy sea "Cualquier persona".'));
     }, 20000);
-    window[cbName] = function(data) {
-      cleanup();
-      resolve(data);
-    };
+    window[cbName] = function(data) { cleanup(); resolve(data); };
     function cleanup() {
       clearTimeout(timer);
       delete window[cbName];
@@ -390,9 +409,9 @@ function gasGet(action, extraParams) {
     }
     script.onerror = function() {
       cleanup();
-      reject(new Error('Error de red con GAS. Verifica la URL y permisos del deploy.'));
+      reject(new Error('No se pudo conectar con GAS. Verifica la URL y que el deploy sea "Cualquier persona".'));
     };
-    document.head.appendChild(script); // appendChild ANTES de asignar src — patrón Maia
+    document.head.appendChild(script); /* appendChild ANTES de src — patrón Maia */
     script.src = url;
   });
 }
