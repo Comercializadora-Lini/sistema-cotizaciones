@@ -20,33 +20,6 @@ body{font-family:'Exo 2',sans-serif;background:var(--surface);color:var(--text);
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-thumb{background:var(--accent);border-radius:4px}
 
-/* ══ LOGIN ══ */
-#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,var(--primary-dk) 0%,var(--primary) 60%,var(--primary-lt) 100%);position:relative;overflow:hidden}
-#login-screen::before{content:'';position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1800') center/cover no-repeat;opacity:.07}
-.login-card{position:relative;z-index:10;background:rgba(255,255,255,.97);border-radius:20px;padding:44px 46px;width:min(420px,92vw);box-shadow:0 24px 64px rgba(0,0,0,.35)}
-.login-logo{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:28px}
-.login-logo img{height:58px;object-fit:contain;border-radius:8px}
-.login-logo-title{font-family:'Rajdhani',sans-serif;font-size:1.3rem;font-weight:700;color:var(--primary);letter-spacing:2px;text-transform:uppercase}
-.login-logo-title span{color:var(--accent)}
-.login-logo-sub{font-size:.70rem;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-top:-4px}
-.login-divider{height:1px;background:var(--border);margin:0 0 24px}
-.lbl{display:block;font-family:'Rajdhani',sans-serif;font-size:.76rem;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--primary);margin-bottom:5px}
-.inp{width:100%;border:1.5px solid var(--border);border-radius:8px;padding:10px 14px;font-family:'Exo 2',sans-serif;font-size:.9rem;color:var(--text);background:#fff;transition:border .18s,box-shadow .18s;outline:none}
-.inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.13)}
-.inp-wrap{position:relative;margin-bottom:18px}
-.eye-btn{position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);padding:2px;display:flex;align-items:center}
-.eye-btn:hover{color:var(--accent)}
-.btn-login{width:100%;padding:12px;background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;border:none;border-radius:9px;font-family:'Rajdhani',sans-serif;font-size:1rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .2s;margin-top:6px;box-shadow:0 4px 14px rgba(79,70,229,.3)}
-.btn-login:hover{background:linear-gradient(135deg,var(--accent),#4338ca)}
-.btn-login:disabled{opacity:.5;cursor:not-allowed}
-.btn-inner{display:flex;align-items:center;justify-content:center;gap:8px}
-.login-msg{margin-top:14px;padding:10px 14px;border-radius:8px;font-size:.82rem;text-align:center;display:none}
-.login-msg.error{background:#fee2e2;color:var(--danger);border:1px solid #fecaca;display:block}
-.login-msg.ok{background:#d1fae5;color:#065f46;border:1px solid #a7f3d0;display:block}
-.login-footer{margin-top:20px;text-align:center;font-size:.68rem;color:var(--muted);border-top:1px solid var(--border);padding-top:12px}
-.spinner-sm{width:16px;height:16px;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .65s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-
 /* ══ APP SHELL ══ */
 #app-screen{display:none;flex-direction:column;min-height:100vh}
 .topbar{height:var(--topbar-h);background:linear-gradient(135deg,var(--dark),var(--primary));display:flex;align-items:center;padding:0 20px;gap:12px;box-shadow:0 3px 16px rgba(0,0,0,.4);position:sticky;top:0;z-index:300}
@@ -209,36 +182,8 @@ tr:hover td{background:#f8fafc}
   <p style="margin-top:12px;font-weight:600;font-size:.88rem" id="loader-txt">Cargando...</p>
 </div>
 
-<!-- ══════════════════════ LOGIN ══════════════════════ -->
-<div id="login-screen">
-  <div class="login-card">
-    <div class="login-logo">
-      <img src="https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=768,fit=crop,q=95/q126bvhsMyCcSLpP/linijpg-b5kPIDWvVuXQZw4B.jpg" alt="Lini" onerror="this.style.display='none'">
-      <div class="login-logo-title">Comercializadora <span>Lini</span></div>
-      <div class="login-logo-sub">Sistema de Cotizaciones</div>
-    </div>
-    <div class="login-divider"></div>
-    <label class="lbl">Correo / Cuenta</label>
-    <div class="inp-wrap">
-      <input class="inp" type="email" id="inp-cuenta" placeholder="correo@empresa.com" autocomplete="username" autocapitalize="none">
-    </div>
-    <label class="lbl">Contraseña</label>
-    <div class="inp-wrap">
-      <input class="inp" type="password" id="inp-pass" placeholder="••••••••" style="padding-right:40px">
-      <button class="eye-btn" onclick="togglePass()" type="button">
-        <svg id="eye-icon" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-      </button>
-    </div>
-    <button class="btn-login" id="btn-login" onclick="doLogin()">
-      <div class="btn-inner" id="btn-inner">INICIAR SESIÓN</div>
-    </button>
-    <div class="login-msg" id="login-msg"></div>
-    <div class="login-footer">© 2026 Comercializadora Lini · <strong>Sistema de Cotizaciones v3.0</strong></div>
-  </div>
-</div>
-
 <!-- ══════════════════════ APP ══════════════════════ -->
-<div id="app-screen">
+<div id="app-screen" style="display:flex;flex-direction:column;min-height:100vh">
 
   <!-- TOPBAR -->
   <header class="topbar">
@@ -457,10 +402,7 @@ function gasPost(payload) {
 // ══════════════════════════════════════════════════════════════
 //  ESTADO GLOBAL
 // ══════════════════════════════════════════════════════════════
-var SESSION = null;
-(function() {
-  try { var s = sessionStorage.getItem('lini_cot_s'); if (s) SESSION = JSON.parse(s); } catch(e) {}
-})();
+var SESSION = { nombre: 'Usuario', rol: 'USUARIO', cuenta: '' };
 
 var db          = { usuarios:[], empresas:[], claves:[], hospitales:[] };
 var cotizaciones= [];
@@ -474,60 +416,10 @@ var currentCotRow    = null;
 var filasClave       = [];
 
 // ══════════════════════════════════════════════════════════════
-//  LOGIN
-// ══════════════════════════════════════════════════════════════
-function togglePass() {
-  var inp = document.getElementById('inp-pass');
-  var ico = document.getElementById('eye-icon');
-  inp.type = inp.type === 'password' ? 'text' : 'password';
-  ico.innerHTML = inp.type === 'text'
-    ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
-    : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
-}
-
-function doLogin() {
-  var cuenta = document.getElementById('inp-cuenta').value.trim();
-  var pass   = document.getElementById('inp-pass').value.trim();
-  var msgEl  = document.getElementById('login-msg');
-  var btnEl  = document.getElementById('btn-login');
-  var inner  = document.getElementById('btn-inner');
-  msgEl.className = 'login-msg'; msgEl.textContent = '';
-  if (!cuenta || !pass) { msgEl.className='login-msg error'; msgEl.textContent='Ingresa correo y contraseña.'; return; }
-  btnEl.disabled = true;
-  inner.innerHTML = '<div class="spinner-sm"></div> Verificando…';
-  gasGet({ accion:'login', cuenta:cuenta, password:pass })
-    .then(function(res) {
-      btnEl.disabled = false;
-      inner.innerHTML = 'INICIAR SESIÓN';
-      if (res.ok) {
-        SESSION = res;
-        SESSION.loginTime = new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
-        try { sessionStorage.setItem('lini_cot_s', JSON.stringify(SESSION)); } catch(e) {}
-        initApp();
-      } else {
-        msgEl.className = 'login-msg error';
-        msgEl.textContent = res.msg || 'Cuenta no registrada o contraseña incorrecta.';
-      }
-    })
-    .catch(function(err) {
-      btnEl.disabled = false;
-      inner.innerHTML = 'INICIAR SESIÓN';
-      msgEl.className = 'login-msg error';
-      msgEl.textContent = err.message;
-    });
-}
-
-document.addEventListener('keydown', function(e) {
-  if (e.key==='Enter' && document.getElementById('login-screen').style.display!=='none') doLogin();
-});
-
-// ══════════════════════════════════════════════════════════════
 //  INICIAR APP
 // ══════════════════════════════════════════════════════════════
 function initApp() {
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app-screen').style.display   = 'flex';
-  var nombre = SESSION.nombre || SESSION.cuenta || '—';
+  var nombre = SESSION.nombre || SESSION.cuenta || 'Usuario';
   var ini = nombre.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
   document.getElementById('user-avatar').textContent = ini;
   document.getElementById('user-name').textContent   = nombre;
@@ -543,7 +435,7 @@ function initApp() {
     .catch(function(err) { loader(false); alertErr(err.message); });
 }
 
-if (SESSION) { document.addEventListener('DOMContentLoaded', initApp); }
+
 
 // ══════════════════════════════════════════════════════════════
 //  RELOJ
@@ -565,11 +457,7 @@ function doLogout() {
     .then(function(r) {
       if (!r.isConfirmed) return;
       SESSION = null;
-      try { sessionStorage.removeItem('lini_cot_s'); } catch(e) {}
-      document.getElementById('app-screen').style.display   = 'none';
-      document.getElementById('login-screen').style.display = 'flex';
-      document.getElementById('inp-cuenta').value = '';
-      document.getElementById('inp-pass').value   = '';
+      location.reload();
     });
 }
 function var_accent(){ return '#4f46e5'; }
@@ -1135,6 +1023,9 @@ function toInputDate(d){
 document.querySelectorAll('.overlay').forEach(function(ov){
   ov.addEventListener('click',function(e){ if(e.target===ov)ov.classList.remove('open'); });
 });
+
+// Iniciar app automáticamente al cargar la página
+document.addEventListener('DOMContentLoaded', initApp);
 </script>
 </body>
 </html>
