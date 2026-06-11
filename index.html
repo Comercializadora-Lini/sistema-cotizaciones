@@ -259,8 +259,10 @@ tr:hover td{background:#f8fafc}
       </div>
       <div class="form-section">
         <div class="form-section-title"><span class="material-icons">business</span> Datos del Cliente</div>
-        <div class="form-grid">
+        <div class="form-grid cols1">
           <div class="form-group"><label>CLIENTE <span class="req">*</span></label><select id="n-cliente" class="form-control" onchange="onClienteChange()"><option value="">-- Seleccionar cliente --</option></select></div>
+        </div>
+        <div class="form-grid cols1" style="margin-top:10px">
           <div class="form-group"><label>DOMICILIO DEL CLIENTE</label><input id="n-domCliente" class="form-control" readonly></div>
         </div>
         <div class="form-grid" style="margin-top:10px">
@@ -354,7 +356,7 @@ tr:hover td{background:#f8fafc}
 <script>
 // ══════════════════════════════════════════════════════════════
 //  ▼▼▼  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▼▼▼
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbw4KcuKmyRkWaQ1qve4QRekQZuaq2AsrH_VIKOWan3zPRCrzQKN_EUn4VDm7uUgfTzunA/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbxcTgFGLpeknCUBzJoXSWHeqrvXVjFuW9EOt_hm0BIRBK1wZthwVOQUJ-mYxO6EP6z7yA/exec';
 //  ▲▲▲  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▲▲▲
 // ══════════════════════════════════════════════════════════════
 
@@ -459,7 +461,7 @@ var seccion     = 'cotizaciones';
 var filtroEstatus='Todos';
 var searchQ     = '';
 var page        = 1;
-var ROWS_PER_PAGE=10;
+var ROWS_PER_PAGE=25;
 var currentIdControl = '';
 var currentCotRow    = null;
 var filasClave       = [];
@@ -892,36 +894,16 @@ function guardarPartidas() {
   var cot=currentCotRow;
   loader(true,'Guardando partidas...');
 
-  /* ── Enviar en lotes de 5 partidas vía JSONP.
-     Usa reduce() para encadenar correctamente cada Promise
-     y capturar el índice de lote sin bugs de closure. ── */
-  var BATCH = 5;
-  var batches = [];
-  for (var i = 0; i < partidas.length; i += BATCH) {
-    batches.push(partidas.slice(i, i + BATCH));
-  }
-
+  /* ── Una partida por llamada JSONP — garantiza que TODAS se guarden
+     sin importar la longitud de la descripción ni la cantidad total.
+     Progreso visible: "Guardando 1/50... 2/50..." ── */
   var totalPartidas = partidas.length;
+  var idCtrl = currentIdControl;
+  var cot    = currentCotRow;
 
-  batches.reduce(function(chain, batch, bi) {
-    return chain.then(function() {
-      loader(true, 'Guardando partidas (' + (bi * BATCH + 1) + '-' +
-        Math.min((bi + 1) * BATCH, totalPartidas) + ' de ' + totalPartidas + ')...');
-      return gasGet('guardarpartidas', {
-        idControl:   idCtrl,
-        partidas:    batch,
-        fechaCot:    cot ? cot.fecha    : '',
-        empresaCot:  cot ? cot.empresa  : '',
-        clienteCot:  cot ? cot.cliente  : '',
-        lote:        bi,
-        totalLotes:  batches.length
-      }).then(function(res) {
-        if (res && !res.ok) throw new Error(res.error || 'Error guardando lote ' + (bi + 1));
-        return res;
-      });
-    });
-  }, Promise.resolve())
-    .then(function() {
+  function enviarPartida(idx) {
+    if (idx >= totalPartidas) {
+      /* Todas enviadas */
       loader(false);
       closeModal('modal-claves');
       Swal.fire({
@@ -932,9 +914,30 @@ function guardarPartidas() {
       }).then(function(r) {
         cargarCotizaciones(function() { if (!r.isConfirmed) abrirClaves(idCtrl); });
       });
-    })
-    .catch(function(err) { loader(false); alertErr(err.message); });
-}
+      return;
+    }
+
+    loader(true, 'Guardando partida ' + (idx + 1) + ' de ' + totalPartidas + '...');
+
+    gasGet('guardarpartidas', {
+      idControl:  idCtrl,
+      partidas:   [ partidas[idx] ],   /* UNA sola partida */
+      fechaCot:   cot ? cot.fecha   : '',
+      empresaCot: cot ? cot.empresa : '',
+      clienteCot: cot ? cot.cliente : '',
+      lote:       idx,
+      totalLotes: totalPartidas
+    }).then(function(res) {
+      if (res && !res.ok) throw new Error(res.error || 'Error en partida ' + (idx + 1));
+      enviarPartida(idx + 1);   /* siguiente */
+    }).catch(function(err) {
+      loader(false);
+      alertErr('Error en partida ' + (idx + 1) + ': ' + err.message);
+    });
+  }
+
+  loader(true, 'Guardando partida 1 de ' + totalPartidas + '...');
+  enviarPartida(0);
 
 // ══════════════════════════════════════════════════════════════
 //  CARGA MASIVA — 1 llamada batch para N claves
