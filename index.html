@@ -354,7 +354,7 @@ tr:hover td{background:#f8fafc}
 <script>
 // ══════════════════════════════════════════════════════════════
 //  ▼▼▼  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▼▼▼
-var GAS_URL = 'https://script.google.com/macros/s/AKfycby4Ubpt1WexO7pIInFMBPcMTcBydwjudU2dJmNy5iy5Jq2eSDWLlBfz292EU_h7C7p8Ew/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbw4KcuKmyRkWaQ1qve4QRekQZuaq2AsrH_VIKOWan3zPRCrzQKN_EUn4VDm7uUgfTzunA/exec';
 //  ▲▲▲  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▲▲▲
 // ══════════════════════════════════════════════════════════════
 
@@ -892,36 +892,48 @@ function guardarPartidas() {
   var cot=currentCotRow;
   loader(true,'Guardando partidas...');
 
-  /* Enviar en lotes de 8 partidas para no exceder el límite de URL */
-  var BATCH=8;
-  var batches=[];
-  for(var i=0;i<partidas.length;i+=BATCH){ batches.push(partidas.slice(i,i+BATCH)); }
+  /* ── Enviar en lotes de 5 partidas vía JSONP.
+     Usa reduce() para encadenar correctamente cada Promise
+     y capturar el índice de lote sin bugs de closure. ── */
+  var BATCH = 5;
+  var batches = [];
+  for (var i = 0; i < partidas.length; i += BATCH) {
+    batches.push(partidas.slice(i, i + BATCH));
+  }
 
-  var chain=Promise.resolve();
-  batches.forEach(function(batch,bi){
-    chain=chain.then(function(){
-      loader(true,'Guardando partidas ('+(bi*BATCH+1)+'-'+Math.min((bi+1)*BATCH,partidas.length)+' de '+partidas.length+')...');
-      return gasGet('guardarpartidas',{
-        idControl:idCtrl,
-        partidas:batch,
-        fechaCot:cot?cot.fecha:'',
-        empresaCot:cot?cot.empresa:'',
-        clienteCot:cot?cot.cliente:'',
-        lote:bi,
-        totalLotes:batches.length
+  var totalPartidas = partidas.length;
+
+  batches.reduce(function(chain, batch, bi) {
+    return chain.then(function() {
+      loader(true, 'Guardando partidas (' + (bi * BATCH + 1) + '-' +
+        Math.min((bi + 1) * BATCH, totalPartidas) + ' de ' + totalPartidas + ')...');
+      return gasGet('guardarpartidas', {
+        idControl:   idCtrl,
+        partidas:    batch,
+        fechaCot:    cot ? cot.fecha    : '',
+        empresaCot:  cot ? cot.empresa  : '',
+        clienteCot:  cot ? cot.cliente  : '',
+        lote:        bi,
+        totalLotes:  batches.length
+      }).then(function(res) {
+        if (res && !res.ok) throw new Error(res.error || 'Error guardando lote ' + (bi + 1));
+        return res;
       });
     });
-  });
-
-  chain
-    .then(function(res){
+  }, Promise.resolve())
+    .then(function() {
       loader(false);
-      if(res&&!res.ok){alertErr(res.error);return;}
       closeModal('modal-claves');
-      Swal.fire({ icon:'success', title:'Partidas guardadas', text:partidas.length+' claves registradas.', confirmButtonColor:var_accent(), confirmButtonText:'OK', showCancelButton:true, cancelButtonText:'Agregar más partidas' })
-        .then(function(r){ cargarCotizaciones(function(){ if(!r.isConfirmed)abrirClaves(idCtrl); }); });
+      Swal.fire({
+        icon: 'success', title: 'Partidas guardadas',
+        text: totalPartidas + ' claves registradas.',
+        confirmButtonColor: var_accent(), confirmButtonText: 'OK',
+        showCancelButton: true, cancelButtonText: 'Agregar más partidas'
+      }).then(function(r) {
+        cargarCotizaciones(function() { if (!r.isConfirmed) abrirClaves(idCtrl); });
+      });
     })
-    .catch(function(err){ loader(false); alertErr(err.message); });
+    .catch(function(err) { loader(false); alertErr(err.message); });
 }
 
 // ══════════════════════════════════════════════════════════════
