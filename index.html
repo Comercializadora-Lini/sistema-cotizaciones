@@ -356,7 +356,7 @@ tr:hover td{background:#f8fafc}
 <script>
 // ══════════════════════════════════════════════════════════════
 //  ▼▼▼  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▼▼▼
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbyEbJ1hNftHo4lYTzEds4CqwteSr_NKf_Bpj3dX9Xl-H9rmpxvJweFiTFUZ6-H904t4Eg/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbyukVcIG-wEXI7eKLA6C9M2r4j9vpOFrKXjwpboSYzS5gfMkNpBGOISx_pxXTSFu01xEg/exec';
 //  ▲▲▲  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▲▲▲
 // ══════════════════════════════════════════════════════════════
 
@@ -476,14 +476,29 @@ function initApp() {
   document.getElementById('user-name').textContent   = nombre;
   document.getElementById('user-role').textContent   = SESSION.rol || 'USUARIO';
   startClock();
-  loader(true,'Cargando catálogos...');
-  gasGet('catalogdata')
+
+  /* Renderizar shell de cotizaciones inmediatamente — nunca pantalla en blanco */
+  render();
+
+  /* Luego cargar catálogos y cotizaciones en paralelo */
+  loader(true, 'Conectando con servidor...');
+
+  var catalogPromise = gasGet('catalogdata')
     .then(function(res) {
-      if (!res.ok) { loader(false); alertErr('Error al cargar datos: ' + (res.error||'')); return; }
-      db = res;
-      cargarCotizaciones();
+      if (res && res.ok) db = res;
     })
-    .catch(function(err) { loader(false); alertErr(err.message); });
+    .catch(function() { /* catálogo falla → continuar sin él */ });
+
+  var cotPromise = gasGet('cotizaciones')
+    .then(function(res) {
+      if (res && res.ok) cotizaciones = res.rows || [];
+    })
+    .catch(function() { cotizaciones = []; });
+
+  Promise.all([catalogPromise, cotPromise]).then(function() {
+    loader(false);
+    render();
+  });
 }
 
 
@@ -517,16 +532,21 @@ function var_accent(){ return '#4f46e5'; }
 //  CARGAR COTIZACIONES
 // ══════════════════════════════════════════════════════════════
 function cargarCotizaciones(cb) {
-  loader(true,'Cargando cotizaciones...');
+  loader(true, 'Cargando cotizaciones...');
   gasGet('cotizaciones')
     .then(function(res) {
       loader(false);
-      if (!res.ok) { alertErr(res.error); return; }
-      cotizaciones = res.rows;
+      if (res && res.ok) cotizaciones = res.rows || [];
+      else if (res && res.error) alertErr(res.error);
       render();
       if (cb) cb();
     })
-    .catch(function(err) { loader(false); alertErr(err.message); });
+    .catch(function(err) {
+      loader(false);
+      alertErr(err.message);
+      render(); /* siempre renderizar aunque falle */
+      if (cb) cb();
+    });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -549,6 +569,8 @@ function render() {
 //  MÓDULO COTIZACIONES
 // ══════════════════════════════════════════════════════════════
 function renderCotizaciones() {
+  var ws = document.getElementById('main-ws');
+  if (!ws) return; /* DOM aún no listo */
   var total      = cotizaciones.length;
   var enProceso  = cotizaciones.filter(function(r){ return r.estatus==='EN PROCESO'; }).length;
   var completadas= cotizaciones.filter(function(r){ return r.estatus==='COMPLETADA'; }).length;
