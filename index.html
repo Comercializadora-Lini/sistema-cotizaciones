@@ -354,7 +354,7 @@ tr:hover td{background:#f8fafc}
 <script>
 // ══════════════════════════════════════════════════════════════
 //  ▼▼▼  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▼▼▼
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbz5qz0vWrifeLoG2ZJaMdFJPg_XSNfNLFQMHJmfgMfjMMNE65vzckdUCP2oOnYNUm2RkA/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycby4Ubpt1WexO7pIInFMBPcMTcBydwjudU2dJmNy5iy5Jq2eSDWLlBfz292EU_h7C7p8Ew/exec';
 //  ▲▲▲  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▲▲▲
 // ══════════════════════════════════════════════════════════════
 
@@ -418,12 +418,34 @@ function gasGetJSONP(action, extraParams) {
 
 
 // POST para mutaciones (guardar, actualizar, eliminar)
+/* gasPost — todas las mutaciones van por JSONP GET.
+   - Payloads pequeños: gasGet directo.
+   - guardarPartidas (payload grande): comprime partidas al mínimo necesario. */
 function gasPost(payload) {
-  return fetch(GAS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  }).then(function(r) { return r.json(); });
+  var action = String(payload.accion || '');
+  var data   = Object.assign({}, payload);
+  delete data.accion;
+
+  /* Para guardarPartidas, reducir partidas al mínimo para caber en URL */
+  if (action === 'guardarpartidas' && Array.isArray(data.partidas)) {
+    data.partidas = data.partidas.map(function(p) {
+      return {
+        idClave:           p.idClave           || '',
+        clave10:           p.clave10           || '',
+        difVariante:       p.difVariante       || '',
+        clave14:           p.clave14           || '',
+        descripcion:       p.descripcion       || '',
+        um:                p.um                || '',
+        marca:             p.marca             || '',
+        unidades:          p.unidades          || 0,
+        histMarcas:        p.histMarcas        || '',
+        comentariosVentas: p.comentariosVentas || '',
+        precioUnit:        0
+      };
+    });
+  }
+
+  return gasGet(action, data);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -869,12 +891,34 @@ function guardarPartidas() {
   var idCtrl=currentIdControl;
   var cot=currentCotRow;
   loader(true,'Guardando partidas...');
-  gasPost({ accion:'guardarpartidas', idControl:idCtrl, partidas:partidas, fechaCot:cot?cot.fecha:'', empresaCot:cot?cot.empresa:'', clienteCot:cot?cot.cliente:'' })
-    .then(function(res) {
+
+  /* Enviar en lotes de 8 partidas para no exceder el límite de URL */
+  var BATCH=8;
+  var batches=[];
+  for(var i=0;i<partidas.length;i+=BATCH){ batches.push(partidas.slice(i,i+BATCH)); }
+
+  var chain=Promise.resolve();
+  batches.forEach(function(batch,bi){
+    chain=chain.then(function(){
+      loader(true,'Guardando partidas ('+(bi*BATCH+1)+'-'+Math.min((bi+1)*BATCH,partidas.length)+' de '+partidas.length+')...');
+      return gasGet('guardarpartidas',{
+        idControl:idCtrl,
+        partidas:batch,
+        fechaCot:cot?cot.fecha:'',
+        empresaCot:cot?cot.empresa:'',
+        clienteCot:cot?cot.cliente:'',
+        lote:bi,
+        totalLotes:batches.length
+      });
+    });
+  });
+
+  chain
+    .then(function(res){
       loader(false);
-      if(!res.ok){alertErr(res.error);return;}
+      if(res&&!res.ok){alertErr(res.error);return;}
       closeModal('modal-claves');
-      Swal.fire({ icon:'success', title:'Partidas guardadas', text:res.total+' claves registradas.', confirmButtonColor:var_accent(), confirmButtonText:'OK', showCancelButton:true, cancelButtonText:'Agregar más partidas' })
+      Swal.fire({ icon:'success', title:'Partidas guardadas', text:partidas.length+' claves registradas.', confirmButtonColor:var_accent(), confirmButtonText:'OK', showCancelButton:true, cancelButtonText:'Agregar más partidas' })
         .then(function(r){ cargarCotizaciones(function(){ if(!r.isConfirmed)abrirClaves(idCtrl); }); });
     })
     .catch(function(err){ loader(false); alertErr(err.message); });
