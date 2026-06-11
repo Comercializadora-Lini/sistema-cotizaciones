@@ -21,7 +21,7 @@ body{font-family:'Exo 2',sans-serif;background:var(--surface);color:var(--text);
 ::-webkit-scrollbar-thumb{background:var(--accent);border-radius:4px}
 
 /* ══ APP SHELL ══ */
-#app-screen{display:flex;flex-direction:column;min-height:100vh}
+#app-screen{display:none;flex-direction:column;min-height:100vh}
 .topbar{height:var(--topbar-h);background:linear-gradient(135deg,var(--dark),var(--primary));display:flex;align-items:center;padding:0 20px;gap:12px;box-shadow:0 3px 16px rgba(0,0,0,.4);position:sticky;top:0;z-index:300}
 .topbar-logo{height:34px;object-fit:contain;border-radius:6px}
 .topbar-title{font-family:'Rajdhani',sans-serif;font-size:1.1rem;font-weight:700;color:#fff;letter-spacing:2px;text-transform:uppercase}
@@ -183,7 +183,7 @@ tr:hover td{background:#f8fafc}
 </div>
 
 <!-- ══════════════════════ APP ══════════════════════ -->
-<div id="app-screen">
+<div id="app-screen" style="display:flex;flex-direction:column;min-height:100vh">
 
   <!-- TOPBAR -->
   <header class="topbar">
@@ -259,10 +259,8 @@ tr:hover td{background:#f8fafc}
       </div>
       <div class="form-section">
         <div class="form-section-title"><span class="material-icons">business</span> Datos del Cliente</div>
-        <div class="form-grid cols1">
+        <div class="form-grid">
           <div class="form-group"><label>CLIENTE <span class="req">*</span></label><select id="n-cliente" class="form-control" onchange="onClienteChange()"><option value="">-- Seleccionar cliente --</option></select></div>
-        </div>
-        <div class="form-grid cols1" style="margin-top:10px">
           <div class="form-group"><label>DOMICILIO DEL CLIENTE</label><input id="n-domCliente" class="form-control" readonly></div>
         </div>
         <div class="form-grid" style="margin-top:10px">
@@ -461,7 +459,7 @@ var seccion     = 'cotizaciones';
 var filtroEstatus='Todos';
 var searchQ     = '';
 var page        = 1;
-var ROWS_PER_PAGE=25;
+var ROWS_PER_PAGE=10;
 var currentIdControl = '';
 var currentCotRow    = null;
 var filasClave       = [];
@@ -476,33 +474,14 @@ function initApp() {
   document.getElementById('user-name').textContent   = nombre;
   document.getElementById('user-role').textContent   = SESSION.rol || 'USUARIO';
   startClock();
-
-  /* 1. Renderizar estructura vacía inmediatamente — nunca pantalla en blanco */
-  renderCotizaciones();
-
-  /* 2. Cargar catálogos */
-  loader(true, 'Cargando catálogos...');
+  loader(true,'Cargando catálogos...');
   gasGet('catalogdata')
     .then(function(res) {
-      if (res && res.ok) db = res;
+      if (!res.ok) { loader(false); alertErr('Error al cargar datos: ' + (res.error||'')); return; }
+      db = res;
+      cargarCotizaciones();
     })
-    .catch(function(e) { console.log('catalogdata error:', e); })
-    .finally(function() {
-      /* 3. Cargar cotizaciones (con o sin catálogo) */
-      loader(true, 'Cargando cotizaciones...');
-      gasGet('cotizaciones')
-        .then(function(res) {
-          if (res && res.ok) cotizaciones = res.rows || [];
-          loader(false);
-          renderCotizaciones();
-        })
-        .catch(function(e) {
-          console.log('cotizaciones error:', e);
-          cotizaciones = [];
-          loader(false);
-          renderCotizaciones();
-        });
-    });
+    .catch(function(err) { loader(false); alertErr(err.message); });
 }
 
 
@@ -536,21 +515,16 @@ function var_accent(){ return '#4f46e5'; }
 //  CARGAR COTIZACIONES
 // ══════════════════════════════════════════════════════════════
 function cargarCotizaciones(cb) {
-  loader(true, 'Cargando cotizaciones...');
+  loader(true,'Cargando cotizaciones...');
   gasGet('cotizaciones')
     .then(function(res) {
       loader(false);
-      if (res && res.ok) cotizaciones = res.rows || [];
-      else if (res && res.error) alertErr(res.error);
+      if (!res.ok) { alertErr(res.error); return; }
+      cotizaciones = res.rows;
       render();
       if (cb) cb();
     })
-    .catch(function(err) {
-      loader(false);
-      alertErr(err.message);
-      render(); /* siempre renderizar aunque falle */
-      if (cb) cb();
-    });
+    .catch(function(err) { loader(false); alertErr(err.message); });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -573,8 +547,6 @@ function render() {
 //  MÓDULO COTIZACIONES
 // ══════════════════════════════════════════════════════════════
 function renderCotizaciones() {
-  var ws = document.getElementById('main-ws');
-  if (!ws) return; /* DOM aún no listo */
   var total      = cotizaciones.length;
   var enProceso  = cotizaciones.filter(function(r){ return r.estatus==='EN PROCESO'; }).length;
   var completadas= cotizaciones.filter(function(r){ return r.estatus==='COMPLETADA'; }).length;
@@ -920,16 +892,36 @@ function guardarPartidas() {
   var cot=currentCotRow;
   loader(true,'Guardando partidas...');
 
-  /* ── Una partida por llamada JSONP — garantiza que TODAS se guarden
-     sin importar la longitud de la descripción ni la cantidad total.
-     Progreso visible: "Guardando 1/50... 2/50..." ── */
-  var totalPartidas = partidas.length;
-  var idCtrl = currentIdControl;
-  var cot    = currentCotRow;
+  /* ── Enviar en lotes de 5 partidas vía JSONP.
+     Usa reduce() para encadenar correctamente cada Promise
+     y capturar el índice de lote sin bugs de closure. ── */
+  var BATCH = 5;
+  var batches = [];
+  for (var i = 0; i < partidas.length; i += BATCH) {
+    batches.push(partidas.slice(i, i + BATCH));
+  }
 
-  function enviarPartida(idx) {
-    if (idx >= totalPartidas) {
-      /* Todas enviadas */
+  var totalPartidas = partidas.length;
+
+  batches.reduce(function(chain, batch, bi) {
+    return chain.then(function() {
+      loader(true, 'Guardando partidas (' + (bi * BATCH + 1) + '-' +
+        Math.min((bi + 1) * BATCH, totalPartidas) + ' de ' + totalPartidas + ')...');
+      return gasGet('guardarpartidas', {
+        idControl:   idCtrl,
+        partidas:    batch,
+        fechaCot:    cot ? cot.fecha    : '',
+        empresaCot:  cot ? cot.empresa  : '',
+        clienteCot:  cot ? cot.cliente  : '',
+        lote:        bi,
+        totalLotes:  batches.length
+      }).then(function(res) {
+        if (res && !res.ok) throw new Error(res.error || 'Error guardando lote ' + (bi + 1));
+        return res;
+      });
+    });
+  }, Promise.resolve())
+    .then(function() {
       loader(false);
       closeModal('modal-claves');
       Swal.fire({
@@ -940,31 +932,9 @@ function guardarPartidas() {
       }).then(function(r) {
         cargarCotizaciones(function() { if (!r.isConfirmed) abrirClaves(idCtrl); });
       });
-      return;
-    }
-
-    loader(true, 'Guardando partida ' + (idx + 1) + ' de ' + totalPartidas + '...');
-
-    gasGet('guardarpartidas', {
-      idControl:  idCtrl,
-      partidas:   [ partidas[idx] ],   /* UNA sola partida */
-      fechaCot:   cot ? cot.fecha   : '',
-      empresaCot: cot ? cot.empresa : '',
-      clienteCot: cot ? cot.cliente : '',
-      lote:       idx,
-      totalLotes: totalPartidas,
-      totalFinal: totalPartidas        /* total real — se escribe en última llamada */
-    }).then(function(res) {
-      if (res && !res.ok) throw new Error(res.error || 'Error en partida ' + (idx + 1));
-      enviarPartida(idx + 1);   /* siguiente */
-    }).catch(function(err) {
-      loader(false);
-      alertErr('Error en partida ' + (idx + 1) + ': ' + err.message);
-    });
-  }
-
-  loader(true, 'Guardando partida 1 de ' + totalPartidas + '...');
-  enviarPartida(0);
+    })
+    .catch(function(err) { loader(false); alertErr(err.message); });
+}
 
 // ══════════════════════════════════════════════════════════════
 //  CARGA MASIVA — 1 llamada batch para N claves
@@ -1138,13 +1108,6 @@ document.querySelectorAll('.overlay').forEach(function(ov){
 });
 
 // Iniciar app automáticamente al cargar la página
-/* finally polyfill para browsers sin soporte */
-if (!Promise.prototype.finally) {
-  Promise.prototype.finally = function(fn) {
-    return this.then(function(v){ fn(); return v; }, function(e){ fn(); throw e; });
-  };
-}
-
 document.addEventListener('DOMContentLoaded', initApp);
 </script>
 </body>
