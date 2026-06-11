@@ -356,7 +356,7 @@ tr:hover td{background:#f8fafc}
 <script>
 // ══════════════════════════════════════════════════════════════
 //  ▼▼▼  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▼▼▼
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbxcTgFGLpeknCUBzJoXSWHeqrvXVjFuW9EOt_hm0BIRBK1wZthwVOQUJ-mYxO6EP6z7yA/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbyEbJ1hNftHo4lYTzEds4CqwteSr_NKf_Bpj3dX9Xl-H9rmpxvJweFiTFUZ6-H904t4Eg/exec';
 //  ▲▲▲  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▲▲▲
 // ══════════════════════════════════════════════════════════════
 
@@ -926,7 +926,8 @@ function guardarPartidas() {
       empresaCot: cot ? cot.empresa : '',
       clienteCot: cot ? cot.cliente : '',
       lote:       idx,
-      totalLotes: totalPartidas
+      totalLotes: totalPartidas,
+      totalFinal: totalPartidas        /* total real — se escribe en última llamada */
     }).then(function(res) {
       if (res && !res.ok) throw new Error(res.error || 'Error en partida ' + (idx + 1));
       enviarPartida(idx + 1);   /* siguiente */
