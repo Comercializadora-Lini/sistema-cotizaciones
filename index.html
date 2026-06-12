@@ -354,7 +354,7 @@ tr:hover td{background:#f8fafc}
 <script>
 // ══════════════════════════════════════════════════════════════
 //  ▼▼▼  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▼▼▼
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbyMMMu8tm3FXRp5uQizJDfMaYEkD9R97m4tyLrsSjZctm2mD4pJ7GaoqSNEJs2etT7Qeg/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbycHNlfPYPDkEnq9mKm1UPTUsWS2VZJx9QiFybUArnI_TX4PY6_FOrdxwnmfF1AqugmHQ/exec';
 //  ▲▲▲  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▲▲▲
 // ══════════════════════════════════════════════════════════════
 
@@ -892,48 +892,41 @@ function guardarPartidas() {
   var cot=currentCotRow;
   loader(true,'Guardando partidas...');
 
-  /* ── Enviar en lotes de 5 partidas vía JSONP.
-     Usa reduce() para encadenar correctamente cada Promise
-     y capturar el índice de lote sin bugs de closure. ── */
-  var BATCH = 5;
-  var batches = [];
-  for (var i = 0; i < partidas.length; i += BATCH) {
-    batches.push(partidas.slice(i, i + BATCH));
-  }
-
+  /* ── 1 partida por llamada — funciona con cualquier cantidad (500+)
+     lote = índice de la partida (0..N-1)
+     totalLotes = total de partidas → CODIGO lo usa para saber cuándo es isLast ── */
   var totalPartidas = partidas.length;
 
-  batches.reduce(function(chain, batch, bi) {
-    return chain.then(function() {
-      loader(true, 'Guardando partidas (' + (bi * BATCH + 1) + '-' +
-        Math.min((bi + 1) * BATCH, totalPartidas) + ' de ' + totalPartidas + ')...');
-      return gasGet('guardarpartidas', {
-        idControl:   idCtrl,
-        partidas:    batch,
-        fechaCot:    cot ? cot.fecha    : '',
-        empresaCot:  cot ? cot.empresa  : '',
-        clienteCot:  cot ? cot.cliente  : '',
-        lote:        bi,
-        totalLotes:  batches.length
-      }).then(function(res) {
-        if (res && !res.ok) throw new Error(res.error || 'Error guardando lote ' + (bi + 1));
-        return res;
-      });
-    });
-  }, Promise.resolve())
-    .then(function() {
+  function enviarSiguiente(idx) {
+    if (idx >= totalPartidas) {
       loader(false);
       closeModal('modal-claves');
       Swal.fire({
-        icon: 'success', title: 'Partidas guardadas',
+        icon:'success', title:'Partidas guardadas',
         text: totalPartidas + ' claves registradas.',
-        confirmButtonColor: var_accent(), confirmButtonText: 'OK',
-        showCancelButton: true, cancelButtonText: 'Agregar más partidas'
+        confirmButtonColor:var_accent(), confirmButtonText:'OK',
+        showCancelButton:true, cancelButtonText:'Agregar más partidas'
       }).then(function(r) {
-        cargarCotizaciones(function() { if (!r.isConfirmed) abrirClaves(idCtrl); });
+        cargarCotizaciones(function(){ if(!r.isConfirmed) abrirClaves(idCtrl); });
       });
-    })
-    .catch(function(err) { loader(false); alertErr(err.message); });
+      return;
+    }
+    loader(true, 'Guardando partida ' + (idx+1) + ' de ' + totalPartidas + '...');
+    gasGet('guardarpartidas', {
+      idControl:  idCtrl,
+      partidas:   [partidas[idx]],
+      fechaCot:   cot ? cot.fecha   : '',
+      empresaCot: cot ? cot.empresa : '',
+      clienteCot: cot ? cot.cliente : '',
+      lote:       idx,
+      totalLotes: totalPartidas
+    }).then(function(res) {
+      if (res && !res.ok) { loader(false); alertErr(res.error || 'Error en partida '+(idx+1)); return; }
+      enviarSiguiente(idx + 1);
+    }).catch(function(err) { loader(false); alertErr(err.message); });
+  }
+
+  enviarSiguiente(0);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -953,25 +946,54 @@ function procesarMasiva() {
   });
   if(nuevas.length===0){alertWarn('No se encontraron datos válidos.');return;}
   closeModal('modal-masiva');
-  loader(true,'Resolviendo '+nuevas.length+' claves...');
-  var items=nuevas.map(function(p){ return { clave10:p.clave10,difVariante:p.difVariante }; });
-  gasGet('resolverbatch', {items:JSON.stringify(items)})
-    .then(function(res) {
-      loader(false);
-      if(!res.ok){alertErr(res.error||'Error al resolver claves');return;}
-      var offsetBase=filasClave.length;
-      var resolvedMap={};
-      nuevas.forEach(function(p,i) {
-        var r=res.resultados[i];
-        if(r&&r.datos){ p.idClave=r.datos.idClave||'';p.clave14=r.datos.clave14||'';p.descripcion=r.datos.descripcion||'';p.um=r.datos.um||'';p.histMarcas=r.datos.histMarcas||''; }
-        if(r) p.difVariante=r.difResuelta||p.difVariante;
-        filasClave.push(p);
-        resolvedMap[offsetBase+i]=r||{ variantes:[],difResuelta:p.difVariante };
-      });
-      renderPartidasBody(resolvedMap);
-      Swal.fire({ icon:'success',title:nuevas.length+' filas cargadas',toast:true,position:'top-end',timer:2500,showConfirmButton:false });
-    })
-    .catch(function(err){ loader(false); alertErr(err.message); });
+
+  /* Resolver claves en grupos de 10 para no exceder URL de GAS */
+  var RBATCH = 10;
+  var grupos = [];
+  for(var g=0; g<nuevas.length; g+=RBATCH) grupos.push(nuevas.slice(g,g+RBATCH));
+
+  var todosResultados = [];
+  loader(true,'Resolviendo claves (1 de '+grupos.length+')...');
+
+  grupos.reduce(function(chain, grupo, gi) {
+    return chain.then(function() {
+      loader(true,'Resolviendo claves ('+(gi+1)+' de '+grupos.length+')...');
+      var items = grupo.map(function(p){ return {clave10:p.clave10, difVariante:p.difVariante}; });
+      return gasGet('resolverbatch', {items:JSON.stringify(items)})
+        .then(function(res) {
+          if(res && res.ok && res.resultados) {
+            todosResultados = todosResultados.concat(res.resultados);
+          } else {
+            /* Si falla el resolve, agregar resultados vacíos para no perder filas */
+            for(var k=0; k<grupo.length; k++) todosResultados.push({variantes:[],difResuelta:'',datos:null});
+          }
+        })
+        .catch(function() {
+          for(var k=0; k<grupo.length; k++) todosResultados.push({variantes:[],difResuelta:'',datos:null});
+        });
+    });
+  }, Promise.resolve())
+  .then(function() {
+    loader(false);
+    var offsetBase = filasClave.length;
+    var resolvedMap = {};
+    nuevas.forEach(function(p,i) {
+      var r = todosResultados[i];
+      if(r && r.datos) {
+        p.idClave     = r.datos.idClave     || '';
+        p.clave14     = r.datos.clave14     || '';
+        p.descripcion = r.datos.descripcion || '';
+        p.um          = r.datos.um          || '';
+        p.histMarcas  = r.datos.histMarcas  || '';
+      }
+      if(r) p.difVariante = r.difResuelta || p.difVariante;
+      filasClave.push(p);
+      resolvedMap[offsetBase+i] = r || {variantes:[], difResuelta:p.difVariante};
+    });
+    renderPartidasBody(resolvedMap);
+    Swal.fire({icon:'success',title:nuevas.length+' filas cargadas',toast:true,position:'top-end',timer:2500,showConfirmButton:false});
+  })
+  .catch(function(err){ loader(false); alertErr(err.message); });
 }
 
 // ══════════════════════════════════════════════════════════════
