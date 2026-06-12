@@ -354,7 +354,7 @@ tr:hover td{background:#f8fafc}
 <script>
 // ══════════════════════════════════════════════════════════════
 //  ▼▼▼  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▼▼▼
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbycHNlfPYPDkEnq9mKm1UPTUsWS2VZJx9QiFybUArnI_TX4PY6_FOrdxwnmfF1AqugmHQ/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbzwOEgH0yBR0FQfsHzdHOcemh0vQM5ebmJZcFY4NOC1MyWIXSrFFcycs0YZt9whgYbGZA/exec';
 //  ▲▲▲  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▲▲▲
 // ══════════════════════════════════════════════════════════════
 
@@ -892,13 +892,34 @@ function guardarPartidas() {
   var cot=currentCotRow;
   loader(true,'Guardando partidas...');
 
-  /* ── 1 partida por llamada — funciona con cualquier cantidad (500+)
-     lote = índice de la partida (0..N-1)
-     totalLotes = total de partidas → CODIGO lo usa para saber cuándo es isLast ── */
+  /* ── Grupos de 20 con campos comprimidos + reintento automático.
+     Soporta 200+ claves. Campos comprimidos: k=clave10, d=difVariante,
+     i=idClave, c=clave14, m=marca, u=unidades, v=comentariosVentas    ── */
+  var GSEND   = 15;   /* partidas por llamada - probado para caber en URL GAS */
+  var RETRIES = 3;    /* reintentos por lote si falla */
   var totalPartidas = partidas.length;
+  var numLotes = Math.ceil(totalPartidas / GSEND);
 
-  function enviarSiguiente(idx) {
-    if (idx >= totalPartidas) {
+  /* Comprimir al mínimo: solo campos esenciales para guardar la fila.
+     descripcion/um/histMarcas también se incluyen porque van en hoja 10. */
+  function comprimir(p) {
+    return {
+      k: String(p.clave10    ||'').replace(/^'/,'').substring(0,14),
+      d: String(p.difVariante||'').replace(/^'/,'').substring(0,8),
+      i: (p.idClave    || '').substring(0,20),
+      c: (p.clave14    || '').substring(0,16),
+      m: (p.marca      || '').substring(0,30),
+      u: Number(p.unidades) || 0,
+      v: (p.comentariosVentas || '').substring(0,50),
+      e: (p.descripcion || '').substring(0,80),
+      x: (p.um          || '').substring(0,10),
+      h: (p.histMarcas  || '').substring(0,60)
+    };
+  }
+
+  function enviarLote(loteIdx, intentos) {
+    if (loteIdx >= numLotes) {
+      /* Todos los lotes enviados */
       loader(false);
       closeModal('modal-claves');
       Swal.fire({
@@ -911,22 +932,46 @@ function guardarPartidas() {
       });
       return;
     }
-    loader(true, 'Guardando partida ' + (idx+1) + ' de ' + totalPartidas + '...');
+
+    var inicio  = loteIdx * GSEND;
+    var fin     = Math.min(inicio + GSEND, totalPartidas);
+    var lote    = partidas.slice(inicio, fin).map(comprimir);
+    var esUltimo = (loteIdx === numLotes - 1);
+
+    loader(true, 'Guardando partidas ' + (inicio+1) + '-' + fin + ' de ' + totalPartidas +
+      (intentos > 0 ? ' (reintento '+intentos+')' : '') + '...');
+
     gasGet('guardarpartidas', {
       idControl:  idCtrl,
-      partidas:   [partidas[idx]],
+      partidas:   lote,
       fechaCot:   cot ? cot.fecha   : '',
       empresaCot: cot ? cot.empresa : '',
       clienteCot: cot ? cot.cliente : '',
-      lote:       idx,
-      totalLotes: totalPartidas
+      lote:       loteIdx,
+      totalLotes: numLotes
     }).then(function(res) {
-      if (res && !res.ok) { loader(false); alertErr(res.error || 'Error en partida '+(idx+1)); return; }
-      enviarSiguiente(idx + 1);
-    }).catch(function(err) { loader(false); alertErr(err.message); });
+      if (res && !res.ok) {
+        if (intentos < RETRIES) {
+          /* Reintentar este lote */
+          setTimeout(function(){ enviarLote(loteIdx, intentos + 1); }, 1500);
+        } else {
+          loader(false);
+          alertErr('Error en partidas ' + (inicio+1) + '-' + fin + ': ' + (res.error||'sin respuesta'));
+        }
+        return;
+      }
+      enviarLote(loteIdx + 1, 0);
+    }).catch(function(err) {
+      if (intentos < RETRIES) {
+        setTimeout(function(){ enviarLote(loteIdx, intentos + 1); }, 1500);
+      } else {
+        loader(false);
+        alertErr('Error de red en partidas ' + (inicio+1) + '-' + fin + ': ' + err.message);
+      }
+    });
   }
 
-  enviarSiguiente(0);
+  enviarLote(0, 0);
 }
 
 // ══════════════════════════════════════════════════════════════
