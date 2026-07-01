@@ -308,6 +308,9 @@ tr:hover td{background:#f8fafc}
               <th style="min-width:110px">MARCA</th>
               <th style="min-width:80px">UNIDADES</th>
               <th style="min-width:120px">COMENTARIOS VENTAS</th>
+              <th style="min-width:90px">NO. PARTIDA</th>
+              <th style="min-width:100px">COSTO OBJETIVO</th>
+              <th style="min-width:100px">PRECIO OBJETIVO</th>
               <th style="min-width:36px"></th>
             </tr>
           </thead>
@@ -357,7 +360,7 @@ tr:hover td{background:#f8fafc}
 <script>
 // ══════════════════════════════════════════════════════════════
 //  ▼▼▼  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▼▼▼
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbwbQ48_73ERPCi846RctYnSQQvenqiIWyrUoKnerwmUPhgABVJAMvAOliem7Ro0taa3xw/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbwcTz0ly4ZdmEGw4OhPEVOOBdrzBGvbp8UaE9_k0dh-sSp78Z4R7GOToMujuWQmuldjlQ/exec';
 //  ▲▲▲  ACTUALIZAR CON CADA NUEVO DEPLOY DE GAS  ▲▲▲
 // ══════════════════════════════════════════════════════════════
 
@@ -782,6 +785,9 @@ function renderPartidasBody(resolvedMap) {
     if(el('fm'))  el('fm').value       =p.marca||'';
     if(el('fu'))  el('fu').value       =p.unidades||0;
     if(el('fcom'))el('fcom').value     =p.comentariosVentas||'';
+    if(el('fnp')) el('fnp').value      =p.noPartida||'';
+    if(el('fco')) el('fco').value      =p.costoObjetivo||0;
+    if(el('fpo')) el('fpo').value      =p.precioObjetivo||0;
     if(el('fdesc'))el('fdesc').innerText=p.descripcion||'--';
     if(el('fum'))  el('fum').innerText  =p.um||'--';
     if(el('fhist'))el('fhist').innerHTML=pillsHtml(p.histMarcas);
@@ -818,6 +824,9 @@ function buildFilaHtml(idx) {
     '<td><input id="fm'+idx+'" placeholder="Marca" style="min-width:90px"></td>'+
     '<td><input id="fu'+idx+'" type="number" min="0" value="0" style="min-width:70px;text-align:right"></td>'+
     '<td><input id="fcom'+idx+'" placeholder="Comentarios..." style="min-width:110px"></td>'+
+    '<td><input id="fnp'+idx+'" placeholder="No. Partida" style="min-width:80px"></td>'+
+    '<td><input id="fco'+idx+'" type="number" min="0" step="0.01" value="0" style="min-width:80px;text-align:right"></td>'+
+    '<td><input id="fpo'+idx+'" type="number" min="0" step="0.01" value="0" style="min-width:80px;text-align:right"></td>'+
     '<td><button class="btn-icon" style="color:var(--danger)" onclick="eliminarFila('+idx+')"><span class="material-icons" style="font-size:15px">delete</span></button></td>'+
   '</tr>';
 }
@@ -829,7 +838,7 @@ function pillsHtml(hist) {
 }
 
 function agregarFila() {
-  filasClave.push({ clave10:'',difVariante:'',clave14:'',idClave:'',descripcion:'',um:'',marca:'',unidades:0,histMarcas:'',comentariosVentas:'' });
+  filasClave.push({ clave10:'',difVariante:'',clave14:'',idClave:'',descripcion:'',um:'',marca:'',unidades:0,histMarcas:'',comentariosVentas:'',noPartida:'',costoObjetivo:0,precioObjetivo:0 });
   var idx=filasClave.length-1;
   document.getElementById('partidas-body').insertAdjacentHTML('beforeend',buildFilaHtml(idx));
   actualizarContadorPartidas();
@@ -888,6 +897,9 @@ function guardarPartidas() {
       unidades:parseFloat(document.getElementById('fu'+idx)?document.getElementById('fu'+idx).value:0)||0,
       histMarcas:p.histMarcas||'',
       comentariosVentas:document.getElementById('fcom'+idx)?document.getElementById('fcom'+idx).value.trim():(p.comentariosVentas||''),
+      noPartida:    document.getElementById('fnp'+idx)?document.getElementById('fnp'+idx).value.trim():(p.noPartida||''),
+      costoObjetivo:parseFloat(document.getElementById('fco'+idx)?document.getElementById('fco'+idx).value:0)||0,
+      precioObjetivo:parseFloat(document.getElementById('fpo'+idx)?document.getElementById('fpo'+idx).value:0)||0,
       precioUnit:0
     };
   });
